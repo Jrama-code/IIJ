@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { genAI, SYSTEM_PROMPT, CRYPTO_SYSTEM_PROMPT, ETF_SYSTEM_PROMPT } from "@/lib/gemini";
+import { groqClient, SYSTEM_PROMPT, CRYPTO_SYSTEM_PROMPT, ETF_SYSTEM_PROMPT } from "@/lib/gemini";
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -91,29 +91,20 @@ export async function POST(req: NextRequest) {
 
     if (precioReal === null || isNaN(precioReal)) return new Response(JSON.stringify({ error: "Precio inválido." }), { status: 400 });
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: isCrypto ? CRYPTO_SYSTEM_PROMPT : (isEtf ? ETF_SYSTEM_PROMPT : SYSTEM_PROMPT),
-      generationConfig: { responseMimeType: "application/json" }
-    });
-
     let userMessage = `INSTRUCCIÓN: Analizá el activo ${tickerUpper}. Categoría: ${isCrypto ? 'Cripto' : (isEtf ? 'ETF' : 'Acción')}. Fecha: ${currentDate}.\n\n${realDataMessage}\n`;
     if (pdfText) userMessage += `\nContexto PDF:\n${pdfText}\n`;
     if (userNotes) userMessage += `\nNotas: ${userNotes}\n`;
 
-    const result = await model.generateContentStream(userMessage);
-    const encoder = new TextEncoder();
-    const customStream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            if (chunkText) controller.enqueue(encoder.encode(chunkText));
-          }
-        } catch (error) { controller.error(error); } finally { controller.close(); }
-      },
+    const completion = await groqClient.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: isCrypto ? CRYPTO_SYSTEM_PROMPT : (isEtf ? ETF_SYSTEM_PROMPT : SYSTEM_PROMPT) },
+        { role: "user", content: userMessage }
+      ],
+      response_format: { type: "json_object" },
+      stream: false
     });
-
-    return new Response(customStream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+    const jsonText = completion.choices[0].message.content;
+    return new Response(jsonText, { headers: { "Content-Type": "application/json" } });
   } catch (error) { return new Response(JSON.stringify({ error: "Error interno" }), { status: 500 }); }
 }

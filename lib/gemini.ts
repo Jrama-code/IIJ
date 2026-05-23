@@ -1,6 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from 'groq-sdk';
 
-export const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+export const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const SYSTEM_PROMPT = `Actúa como un Analista de Inversiones Senior con 25 años de experiencia en Value Investing, Growth Investing y asignación de capital institucional. Tu enfoque combina el rigor cuantitativo de Benjamin Graham con la visión de fosos económicos de Charlie Munger. Tu objetivo es desmantelar un activo para determinar con precisión si es una joya o una trampa de valor.
 
